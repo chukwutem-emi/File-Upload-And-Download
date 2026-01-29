@@ -48,7 +48,6 @@ exports.postLogin = (req, res, next) => {
     User.findOne({email: email})
     .then(user => {
       if (!user) {
-        req.flash("error", "")
         return res.status(422).render(
         "auth/login", {
         path: '/login',
@@ -60,19 +59,20 @@ exports.postLogin = (req, res, next) => {
       }
       passwordEncrypt.compare(password, user.password)
       .then((doMatch) => {
-        if(doMatch) {
+        if (doMatch) {
           req.session.isLoggedIn = true;
           req.session.user = {
             _id: user._id.toString(),
-            email: user.email,
-            password: user.password
+            email: user.email
           };
-          return req.session.save(err => {
-            if(err) {
-                console.log(err);
-            }
-            return res.redirect("/")
+          req.session.save(err => {
+              if (err) {
+                  console.log("LOGIN-ERROR:", err);
+                  return next(err);
+              }
+              res.redirect("/");
           });
+          return;
         }
         return res.status(422).render(
         "auth/login", {
@@ -230,7 +230,7 @@ exports.postNewPassword = (req, res, next) => {
     resetUser.password = hashedPassword;
     resetUser.resetToken = undefined;
     resetUser.resetTokenExpiration = undefined;
-    resetUser.save();
+    return resetUser.save();
   })
   .then((result) => {
     res.redirect("/login");
