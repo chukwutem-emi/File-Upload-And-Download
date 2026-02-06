@@ -1,5 +1,7 @@
 const Product = require('../models/product');
 const { validationResult } = require("express-validator");
+const s3Helper = require("../util/s3");
+const path = require("path");
 
 const fileHelper = require("../util/file")
 
@@ -14,7 +16,7 @@ exports.getAddProduct = (req, res, next) => {
   });
 };
 
-exports.postAddProduct = (req, res, next) => {
+exports.postAddProduct = async (req, res, next) => {
   const title = req.body.title;
   const image = req.file;
   const price = req.body.price;
@@ -51,41 +53,26 @@ exports.postAddProduct = (req, res, next) => {
         validationErrors: errors.array()
       });
   };
-  const imageUrl = image.filename;
+  try {
+    const s3Key = Date.now() + path.extname(image.originalname);
+    const imageUrl = await s3Helper.uploadFile(image.path, s3Key);
 
-  const product = new Product({
-    title: title,
-    price: price,
-    description: description,
-    imageUrl: imageUrl,
-    userId: req.user
-  });
-  product
-    .save()
-    .then(result => {
-      // console.log(result);
-      console.log('Created Product');
-      res.redirect('/admin/products');
-    })
-    .catch(err => {
-      // return res.status(500).render('admin/edit-product', {
-      //   pageTitle: 'Add Product',
-      //   path: '/admin/add-product',
-      //   editing: false,
-      //   hasError: true,
-      //   product: {
-      //     title: title,
-      //     imageUrl: imageUrl,
-      //     price: price,
-      //     description: description
-      //   },
-      //   errorMessage: "Database Operation failed, please try again.",
-      //   validationErrors:[]
-      // });
-      const error = new Error(err);
-      error.httpStatusCode = 500;
-      return next(error);
+    fileHelper.deleteFile(image.path);
+    const product = new Product({
+      title: title,
+      price: price,
+      description: description,
+      imageUrl: imageUrl,
+      userId: req.user
     });
+    await product.save();
+    console.log('Created Product');
+    res.redirect('/admin/products');
+  } catch (err) {
+    const error = new Error(err);
+    error.httpStatusCode = 500;
+    return next(error);
+  };
 };
 
 exports.getEditProduct = (req, res, next) => {
@@ -116,7 +103,7 @@ exports.getEditProduct = (req, res, next) => {
     });
 };
 
-exports.postEditProduct = (req, res, next) => {
+exports.postEditProduct = async (req, res, next) => {
   const prodId = req.body.productId;
   const updatedTitle = req.body.title;
   const updatedPrice = req.body.price;
@@ -141,48 +128,45 @@ exports.postEditProduct = (req, res, next) => {
 
     });
   }
-  Product.findById(prodId)
-    .then(product => {
-      if (product.userId.toString() !== req.user._id.toString()) {
-        return res.redirect("/");
-      }
-      product.title = updatedTitle;
-      product.price = updatedPrice;
-      product.description = updatedDesc;
-      if (image) {
-        fileHelper.deleteFile(product.imageUrl);
-        product.imageUrl = image.filename;
-      }
-      return product.save()
-      .then(result => {
-        console.log('UPDATED PRODUCT!');
-        res.redirect('/admin/products');
-      })
-    })
-    .catch(err => {
-      const error = new Error(err);
-      error.httpStatusCode = 500;
-      return next(error);
-    });
+  const product = await Product.findById(prodId);
+  if (product.userId.toString() !== req.user._id.toString()) {
+    return res.redirect("/");
+  }
+  product.title = updatedTitle;
+  product.price = updatedPrice;
+  product.description = updatedDesc;
+  if (image) {
+    // Delete old image from S3
+    const oldKey = product.imageUrl.split('/').pop();
+    await s3Helper.deleteFile(oldKey);
+    // Upload new image
+    const s3Key = Date.now() + path.extname(image.originalname);
+    const newImageUrl = await s3Helper.uploadFile(image.path, s3Key);
+    fileHelper.deleteFile(product.imageUrl);
+    product.imageUrl = newImageUrl;
+  }
+  await product.save();
+  console.log('UPDATED PRODUCT!');
+  res.redirect('/admin/products');
 };
 
 exports.getProducts = (req, res, next) => {
-  Product.find({userId: req.user._id})
-    // .select('title price -_id')
-    // .populate('userId', 'name')
-    .then(products => {
-      console.log(products);
-      res.render('admin/products', {
-        prods: products,
-        pageTitle: 'Admin Products',
-        path: '/admin/products'
-      });
-    })
-    .catch(err => {
-      const error = new Error(err);
-      error.httpStatusCode = 500;
-      return next(error);
+Product.find({userId: req.user._id})
+  // .select('title price -_id')
+  // .populate('userId', 'name')
+  .then(products => {
+    console.log(products);
+    res.render('admin/products', {
+      prods: products,
+      pageTitle: 'Admin Products',
+      path: '/admin/products'
     });
+  })
+  .catch(err => {
+    const error = new Error(err);
+    error.httpStatusCode = 500;
+    return next(error);
+  });
 };
 
 exports.postDeleteProduct = (req, res, next) => {

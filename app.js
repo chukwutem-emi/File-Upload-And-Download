@@ -79,6 +79,7 @@ const fileFilter = (req, file, cb) => {
 app.use(bodyParser.urlencoded({ extended: false }));
 
 app.use(multer({storage: fileStorage, fileFilter: fileFilter}).single("image"));
+app.use(multer({storage: multer.memoryStorage(), fileFilter: fileFilter}).single("image"));
 
 app.use(express.static(path.join(__dirname, 'public')));
 
