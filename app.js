@@ -17,8 +17,32 @@ require("dotenv").config();
 const store = new MongoDBStore({
   uri: process.env.DATABASE_CONFIG,
   collection: "sessions",
-
 })
+// const s3 = new S3Client({
+//   region: "",
+//   credentials: {
+//     accessKeyId: process.env.AWS_ACCESS_KEY_ID,
+//     secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY
+//   }
+// });
+// const uploadVideo = async (filePath, fileName) => {
+//   const fileStream = fs.createReadStream(filePath);
+
+//   const uploadParams = {
+//     Bucket: "my-video-bucket",
+//     Key: fileName,
+//     Body: fileStream,
+//     ContentType: "video/mp4"
+//   };
+
+//   try {
+//     await s3.send(new PutObjectCommand(uploadParams));
+//     console.log("Video uploaded successfully!");
+//   } catch (err) {
+//     console.error("Error uploading video:", err);
+//   }
+// }
+// uploadVideo("./uploads/my-video.mp4", "my-video.mp4");
 
 app.set('view engine', 'ejs');
 app.set('views', 'views');
@@ -27,6 +51,7 @@ const adminRoutes = require('./routes/admin');
 const shopRoutes = require('./routes/shop');
 const authRoutes = require("./routes/auth");
 const flash = require("connect-flash");
+const { fileURLToPath } = require('url');
 
 const imagePath = path.join(__dirname, "image");
 
